@@ -56,3 +56,45 @@ Este archivo es la memoria viva del proyecto entre sesiones de agentes, y entre 
 **Preguntas para Victor:**
 - ¿Ya existe una base de datos Vercel Postgres creada, o hay que crearla antes de la próxima sesión?
 - Para el Mes 1, ¿la autoevaluación inicial (TDAH/dislexia/ansiedad) la quieres con preguntas ya redactadas por ti, o construyo una primera versión de borrador para que la revises?
+
+---
+
+### Sesión 2 — 2026-06-18
+**Hecho:** Con autorización explícita de Victor para avanzar de forma autónoma, se completaron los tres primeros puntos del "Sigue" de la Sesión 1:
+- **Base de datos real:** en vez de crear ya un recurso de Vercel Postgres (de pago, no reversible fácilmente), se usó Postgres 16 local dentro del entorno de trabajo para correr la primera migración real (`prisma migrate dev --name init`) y validar el schema contra una base de datos de verdad. La migración quedó en `prisma/migrations/`. La URL de conexión real vive solo en `.env` (no se commitea); `.env.example` documenta las variables sin valores reales.
+- **Auth.js con enlace mágico:** `src/auth.ts` configura NextAuth v5 con `@auth/prisma-adapter` sobre los modelos `Account`/`Session`/`VerificationToken` ya existentes, estrategia de sesión `"database"`, y proveedor `Nodemailer` (SMTP genérico, sin atarse a un vendor específico de correo). Páginas propias en español: `/iniciar-sesion` (formulario de correo) y `/iniciar-sesion/revisa-tu-correo` (confirmación). Las credenciales SMTP reales todavía no están puestas — el envío de correos fallará hasta que Victor las configure.
+- **Módulo Mes 1 ("Antes" — Autoconocimiento) de principio a fin:**
+  - `prisma/seed.ts` siembra los 4 `ModuloContenido` del mes (autoevaluación, equipo de apoyo, "por qué", hábito de voz), conectado a `prisma.config.ts` (`migrations.seed`) para correr con `npx prisma db seed`.
+  - `src/lib/db.ts`: esquema de Dexie (IndexedDB) para guardar grabaciones de voz en el dispositivo antes de sincronizar.
+  - `src/components/GrabadorDeVoz.tsx`: componente cliente reutilizable que grava audio con `MediaRecorder` (no Web Speech API — ver nota de decisiones abajo), lo guarda en IndexedDB, y avisa al padre cuando se guardó.
+  - `src/components/AyudaCrisis.tsx`: banner fijo de ayuda en crisis, visible en todas las pantallas de `/antes` vía `src/app/antes/layout.tsx` (que también protege la ruta — redirige a `/iniciar-sesion` si no hay sesión).
+  - `src/app/antes/mes-1/page.tsx`: pantalla resumen del mes con los 4 módulos y marca de completado (✓) por usuario.
+  - Cuatro subpáginas: `autoevaluacion` (cuestionario corto de una pregunta a la vez, sin puntaje — cada respuesta da una estrategia concreta, nunca una etiqueta; contenido de muestra, ver pregunta pendiente abajo), `equipo-de-apoyo`, `por-que` y `habito-de-voz` (estas tres usan `GrabadorDeVoz` con un prompt distinto cada una).
+  - `src/app/antes/mes-1/actions.ts`: server action `marcarModuloCompletado` que hace upsert de `Progreso` por usuario autenticado.
+  - `src/types/next-auth.d.ts`: aumenta el tipo `Session` de Auth.js para incluir `user.id` (necesario para el `where` del upsert de `Progreso`).
+- Se agregó `AUTH_TRUST_HOST="true"` a `.env`/`.env.example` — sin esto, Auth.js v5 rechaza cualquier host que no reconozca como propio (`UntrustedHost`) en self-hosted/puertos no estándar; Vercel no lo necesita porque ya confía en su propio dominio, pero se deja explícito para que el self-hosting/desarrollo local no se rompa.
+- Se limpió un warning de ESLint (`eslint.config.mjs` ahora ignora `public/sw.js` y `public/swe-worker*.js`, que son archivos generados por Serwist y no deberían lintearse) y un `eslint-disable` que ya no hacía nada en `GrabadorDeVoz.tsx`.
+
+**Verificación realizada (sin navegador real disponible en este entorno):** `npm run lint` y `npm run build` limpios. Se probó el flujo completo contra la base de datos local insertando manualmente un `User`+`Session` de prueba (borrados al terminar) y usando `curl` con la cookie de sesión (`authjs.session-token`) para confirmar: redirección a `/iniciar-sesion` sin sesión (307), acceso correcto a `/antes/mes-1` y a una subpágina con sesión (200), y que el upsert de `Progreso` (la misma lógica que usa el server action) marca el módulo como completado y aparece el ✓ en el resumen. **No se pudo probar de verdad la grabación de audio ni el envío real del correo de enlace mágico** — eso requiere micrófono/navegador real y credenciales SMTP, ninguno disponible aquí.
+
+**Decisiones:**
+- Postgres local (no Vercel Postgres) para esta sesión, para no crear un recurso de nube/facturación sin confirmación más directa de Victor — totalmente reversible, la URL de producción se cambia solo en variables de entorno cuando Victor decida crear el recurso real.
+- Nodemailer (SMTP genérico) en vez de un proveedor específico (p. ej. Resend) porque `CLAUDE.md` no especifica un vendor — queda neutral hasta que Victor elija uno.
+- El "hábito de registro por voz" y los otros módulos de Mes 1 que piden grabación usan `MediaRecorder` para guardar audio crudo, **no** la Web Speech API. Esto no contradice el stack (`CLAUDE.md` menciona Web Speech API nativa para voz) porque la decisión ya tomada es que v1 no transcribe automáticamente — se guarda el audio tal cual. Web Speech API solo haría falta si en el futuro se agrega transcripción real.
+- El banner `AyudaCrisis` es una implementación v1 **estática** (siempre visible, no detecta nada). Es un cumplimiento parcial, no completo, del principio "si la respuesta sugiere una crisis real, dirigir a una persona real" — todavía no hay ninguna detección de palabras/señales de crisis en las respuestas del usuario. Si se quiere ese nivel de detección, es trabajo futuro explícito, no algo ya resuelto.
+- Las preguntas de la autoevaluación inicial son contenido de muestra explícitamente marcado como tal en el código (`Autoevaluacion.tsx`) — no son las preguntas reales sobre TDAH/dislexia/ansiedad que pide el currículo, porque Victor todavía no ha dicho si las redacta él o si debo proponer un borrador (pregunta ya hecha en la Sesión 1, sigue sin respuesta).
+
+**Estado actual:** El Mes 1 completo de "Antes" funciona de extremo a extremo contra una base de datos real: un usuario autenticado puede ver el resumen del mes, completar sus 4 módulos (3 por voz + 1 cuestionario corto) y ver su progreso reflejado. Auth.js con enlace mágico está configurado pero no probado de verdad (faltan credenciales SMTP). Nada de esto se ha visto en un navegador real ni en un teléfono — solo se validó por build/lint/curl contra Postgres local.
+
+**Sigue (en orden de prioridad):**
+1. Cuando Victor decida, crear la base de datos Vercel Postgres real y migrar `DATABASE_URL` de local a producción (correr `prisma migrate deploy` contra ella).
+2. Configurar credenciales SMTP reales (cualquier proveedor) para que el enlace mágico funcione de verdad, y probarlo con un correo real.
+3. Que Victor responda quién redacta las preguntas reales de la autoevaluación del Mes 1 (sigue pendiente desde la Sesión 1) y reemplazar el contenido de muestra en `Autoevaluacion.tsx`.
+4. Construir el Mes 2 ("Cimientos espirituales") siguiendo el mismo patrón ya establecido en Mes 1.
+5. Generar íconos/branding reales de la PWA (sigue pendiente desde la Sesión 1).
+6. Evaluar si vale la pena un primer nivel de detección de palabras de crisis en las respuestas de voz/texto, más allá del banner estático — sin perder de vista que la app nunca debe intentar "resolver" la crisis por sí sola, solo detectar mejor cuándo mostrar el aviso con más énfasis.
+
+**Preguntas para Victor:**
+- ¿Ya existe (o ya se creó) la base de datos Vercel Postgres de producción?
+- ¿Quién redacta las preguntas reales de la autoevaluación inicial del Mes 1 — tú, o propongo un borrador?
+- ¿Qué proveedor SMTP quieres usar para el enlace mágico (o prefieres que yo sugiera uno)?
