@@ -1,0 +1,155 @@
+// Schema base — Sesión 1. Ver PROJECT_LOG.md y CLAUDE.md para contexto y decisiones.
+// Modelos User/Account/Session/VerificationToken siguen la convención del adapter
+// de Prisma para Auth.js, para que el enlace mágico se pueda conectar sin migrar el schema.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  JOVEN
+  PADRE_MADRE
+  OBISPO
+  MENTOR
+}
+
+enum FaseMisional {
+  ANTES
+  DESPUES
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  rol           Rol       @default(JOVEN)
+  emailVerified DateTime?
+  image         String?
+
+  fase          FaseMisional?
+  mesActual     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts            Account[]
+  sessions             Session[]
+  progresos            Progreso[]
+  suscripcionesPush    SuscripcionPush[]
+  vinculosComoJoven    VinculoApoyo[]    @relation("VinculoJoven")
+  vinculosComoApoyo    VinculoApoyo[]    @relation("VinculoApoyo")
+}
+
+// --- Modelos requeridos por el adapter de Prisma para Auth.js (enlace mágico) ---
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Vínculo de apoyo: conecta a un joven con un padre/madre, obispo o mentor ---
+// La visibilidad de cada vínculo requiere consentimiento explícito del joven
+// (ver "Principios de diseño que NUNCA se rompen" en CLAUDE.md). Nunca es automática.
+
+model VinculoApoyo {
+  id     String @id @default(cuid())
+  jovenId String
+  apoyoId String
+
+  consentimientoJoven Boolean   @default(false)
+  consentidoEn        DateTime?
+
+  createdAt DateTime @default(now())
+
+  joven User @relation("VinculoJoven", fields: [jovenId], references: [id])
+  apoyo User @relation("VinculoApoyo", fields: [apoyoId], references: [id])
+
+  @@unique([jovenId, apoyoId])
+}
+
+// --- Módulo de contenido del currículo de 15 meses (ver CURRICULUM.md) ---
+
+model ModuloContenido {
+  id     String       @id @default(cuid())
+  fase   FaseMisional
+  mes    Int
+  titulo String
+  orden  Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progresos Progreso[]
+
+  @@unique([fase, mes, orden])
+}
+
+// --- Progreso del joven en cada módulo. Siempre feedback de crecimiento, nunca un solo número. ---
+
+model Progreso {
+  id       String @id @default(cuid())
+  userId   String
+  moduloId String
+
+  completado     Boolean   @default(false)
+  completadoEn   DateTime?
+  notaDeVoz      String? // referencia a archivo de audio en Vercel Blob, no transcripción automática (ver CLAUDE.md)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modulo ModuloContenido @relation(fields: [moduloId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduloId])
+}
+
+// --- Suscripciones push (web-push) ---
+
+model SuscripcionPush {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
