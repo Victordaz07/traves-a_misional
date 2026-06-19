@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   description:
     "Compañero de preparación y reingreso misional, antes y después de servir.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

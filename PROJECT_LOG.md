@@ -98,3 +98,20 @@ Este archivo es la memoria viva del proyecto entre sesiones de agentes, y entre 
 - ¿Ya existe (o ya se creó) la base de datos Vercel Postgres de producción?
 - ¿Quién redacta las preguntas reales de la autoevaluación inicial del Mes 1 — tú, o propongo un borrador?
 - ¿Qué proveedor SMTP quieres usar para el enlace mágico (o prefieres que yo sugiera uno)?
+
+---
+
+### Sesión 3 — 2026-06-19
+**Hecho:** Se tomó el punto 5 del "Sigue" de la Sesión 2 (ícono real de la PWA), el único pendiente que no dependía de una decisión de Victor. Se reemplazó el placeholder "TM" por un ícono con un motivo de camino/sendero (línea blanca curva sobre el azul de marca `#1d4ed8`, con un punto de partida y un punto de destino) — coherente con el nombre "Travesía". Se generaron `public/icons/icon.svg` (versión redondeada, propósito `any`) y `public/icons/icon-maskable.svg` (mismo diseño a sangrado completo, sin esquinas redondeadas propias, para que el sistema operativo aplique su propia máscara). Con `sharp` (ya presente como dependencia transitiva de Next.js, no se agregó ninguna dependencia nueva) se rasterizaron `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` y `public/apple-touch-icon.png` (180×180). `public/manifest.json` y `src/app/layout.tsx` (campo `icons` de metadata) se actualizaron para referenciar los nuevos archivos.
+
+**Decisiones:** Diseño propio (sendero/camino simple, dos colores) en vez de seguir esperando una decisión de branding de Victor — es de bajo riesgo y fácil de reemplazar si Victor prefiere algo distinto; no se tocó el color de marca (`#1d4ed8`) ya establecido en la Sesión 1.
+
+**Verificación realizada:** `npm run lint` y `npm run build` limpios. Se sirvió la app (`npm run start`) y se confirmó con `curl` que `/manifest.json`, `/icons/icon.svg`, `/icons/icon-192.png`, `/icons/icon-512.png`, `/icons/icon-maskable-512.png` y `/apple-touch-icon.png` responden 200 con el `content-type` correcto. No se probó en un dispositivo real cómo se ve instalado como ícono de pantalla de inicio (ni Android ni iOS) — eso sigue pendiente de una prueba real en teléfono.
+
+**Estado actual:** Igual que al final de la Sesión 2, más el ícono de la PWA ya no es un placeholder de texto — ahora es un diseño simple intencional, aunque no validado en un dispositivo real ni revisado por Victor.
+
+**Sigue (en orden de prioridad):** Igual que el listado de la Sesión 2 (puntos 1-3 dependen de Victor; punto 4 es Mes 2; punto 6 es evaluar detección de crisis). El punto 5 (íconos) se considera resuelto por ahora, pendiente de que Victor lo revise y pida cambios si quiere otro estilo.
+
+**Preguntas para Victor:**
+- ¿Te gusta el ícono nuevo (sendero blanco sobre azul) o prefieres otra dirección de diseño/branding?
+- Las mismas tres preguntas de la Sesión 2 siguen abiertas (base de datos de producción, autoevaluación, proveedor SMTP).
